@@ -17,6 +17,7 @@ mod fat_sample {
     };
     use scale::{Decode, Encode};
     use sha2::{Sha256, Digest};
+//    use ink_prelude;
 
     use quircs;
 
@@ -205,8 +206,13 @@ mod fat_sample {
             let mut decoder = quircs::Quirc::default();
             let codes = decoder.identify(Into::<usize>::into(img.width), Into::<usize>::into(img.height), &img.data);
 
+            let mut extractFailures: i32 = 0;
             let mut res = Vec::new();
             for code in codes {
+                if code.is_err() {
+                    extractFailures += 1;
+                    continue;
+                }
                 let code = code.expect("failed to extract");
                 let tl = Point { x: code.corners[0].x, y: code.corners[0].y };
                 let tr = Point { x: code.corners[1].x, y: code.corners[1].y };
@@ -215,7 +221,7 @@ mod fat_sample {
                 res.push(Code { size: code.size, tl: tl, tr: tr, br: br, bl: bl });
             }
 
-            Ok(Codes { codes: res })
+            Ok(Codes { extractFailures: extractFailures, codes: res })
         }
 
         #[ink(message)]
@@ -339,6 +345,7 @@ mod fat_sample {
     #[derive(Encode, Decode, Debug)]
     #[cfg_attr(feature = "std", derive(scale_info::TypeInfo))]
     pub struct Codes {
+        extractFailures: i32,
         codes: Vec<Code>,
     }
 
@@ -381,6 +388,7 @@ mod fat_sample {
         width: u16,
         height: u16,
         data: Vec<u8>,
+//        data: ink_prelude::vec::Vec<u8>,
     }
 
     /// Unit tests in Rust are normally defined within such a `#[cfg(test)]`

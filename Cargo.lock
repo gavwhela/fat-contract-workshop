@@ -654,6 +654,7 @@ dependencies = [
 [[package]]
 name = "quircs"
 version = "0.10.0"
+source = "git+https://github.com/gavwhela/quircs?branch=master#8e3ae3f32a6bc51839dfac280b738f94ac071001"
 dependencies = [
  "fixed",
  "fixed-macro",
