@@ -16,6 +16,13 @@ mod fat_sample {
         PinkEnvironment,
     };
     use scale::{Decode, Encode};
+    use sha2::{Sha256, Digest};
+
+    use rustface::{Detector, FaceInfo, ImageData, create_detector_with_model};
+    use rustface::model::{read_model, Model};
+
+    const MODEL_SHA256: &str = "c4619d066ed35e84d9a8e842860b0dff567aba0cbb139881075538761db3ff5d";
+    const MODEL_LOCATION: &str = "https://files.catbox.moe/m4y6c6.bin";
 
     #[ink(storage)]
     #[derive(SpreadAllocate)]
@@ -47,8 +54,10 @@ mod fat_sample {
         InvalidAddress,
         NoPermission,
         InvalidSignature,
+        InvalidModelSignature,
         UsernameAlreadyInUse,
         AccountAlreadyInUse,
+        InvalidImage,
     }
 
     impl FatSample {
@@ -132,8 +141,8 @@ mod fat_sample {
 
         #[ink(message)]
         pub fn query_example(&self) -> (u16, Vec<u8>) {
-            let resposne = http_get!("https://example.com");
-            (resposne.status_code, resposne.body)
+            let response = http_get!("https://example.com");
+            (response.status_code, response.body)
         }
 
         /// Attests a Github Gist by the raw file url. (Query only)
@@ -146,11 +155,11 @@ mod fat_sample {
             // Verify the URL
             let gist_url = parse_gist_url(&url)?;
             // Fetch the gist content
-            let resposne = http_get!(url);
-            if resposne.status_code != 200 {
+            let response = http_get!(url);
+            if response.status_code != 200 {
                 return Err(Error::RequestFailed);
             }
-            let body = resposne.body;
+            let body = response.body;
             // Verify the claim and extract the account id
             let account_id = extract_claim(&body)?;
             let attestation = Attestation {
@@ -183,6 +192,49 @@ mod fat_sample {
                 return Err(Error::InvalidSignature);
             }
             Ok(signed.attestation)
+        }
+
+        #[ink(message)]
+        pub fn process_img(&self, img: Img) -> Result<Faces, Error> {
+            if img.data.len() != Into::<usize>::into(img.width) * Into::<usize>::into(img.height) {
+                return Err(Error::InvalidImage);
+            }
+
+            // Not clear that this is functioning correctly - generally just getting a hang when
+            // attempting to trigger this from the frontend.
+            let response = http_get!(MODEL_LOCATION);
+            if response.status_code != 200 {
+                return Err(Error::RequestFailed);
+            }
+            let mut hasher = Sha256::new();
+            hasher.update(&response.body);
+            let result = hasher.finalize();
+            if hex::encode(result) != MODEL_SHA256 {
+                return Err(Error::InvalidModelSignature);
+            }
+
+            // Pulling in the following code results in floating point operations in the resultant
+            // wasm making `uploadCodeToCluster` fail.
+
+//            let model = read_model(response.body);
+//            let mut detector = create_detector_with_model(model);
+//            detector.set_min_face_size(20);
+//            detector.set_score_thresh(2.0);
+//            detector.set_pyramid_scale_factor(0.8);
+//            detector.set_slide_window_step(4, 4);
+//            let mut image = ImageData::new(&img.data, img.width.into(), img.height.into());
+//
+//            let mut res: Vec<Face> = Vec::new();
+//            for face in detector.detect(&mut image).into_iter() {
+//                let bbox = face.bbox();
+//                res.push(Face { score: (face.score() * 100.0) as i32,
+//                                x: bbox.x(),
+//                                y: bbox.y(),
+//                                width: bbox.width(),
+//                                height: bbox.height() });
+//            }
+
+            Ok(Faces { faces: Vec::new() })
         }
     }
 
@@ -258,6 +310,30 @@ mod fat_sample {
     pub struct SignedAttestation {
         attestation: Attestation,
         signature: Vec<u8>,
+    }
+
+    #[derive(Encode, Decode, Debug)]
+    #[cfg_attr(feature = "std", derive(scale_info::TypeInfo))]
+    pub struct Faces {
+        faces: Vec<Face>,
+    }
+
+    #[derive(Encode, Decode, Debug)]
+    #[cfg_attr(feature = "std", derive(scale_info::TypeInfo))]
+    pub struct Face {
+        score: i32,
+        x: i32,
+        y: i32,
+        width: u32,
+        height: u32,
+    }
+
+    #[derive(Encode, Decode, Debug)]
+    #[cfg_attr(feature = "std", derive(scale_info::TypeInfo))]
+    pub struct Img {
+        width: u16,
+        height: u16,
+        data: Vec<u8>,
     }
 
     /// Unit tests in Rust are normally defined within such a `#[cfg(test)]`
