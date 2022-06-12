@@ -20,7 +20,10 @@ safe-regex = { version = "0.2.5", default-features = false }
 hex = { version = "0.4.3", default-features = false, features = ["alloc"] }
 sha2 = { version = "0.10.2", default-features = false }
 
-rustface = { git = "https://github.com/gavwhela/rustface", branch = "master", version = "0.1.7", default-features = false }
+#rustface = { git = "https://github.com/gavwhela/rustface", branch = "master", version = "0.1.7", default-features = false }
+#rustface = { path = "../rustface", version = "0.1.7", default-features = false }
+
+quircs = { path = "../quircs", version = "0.10.0", default-features = false }
 
 [lib]
 name = "fat_sample"

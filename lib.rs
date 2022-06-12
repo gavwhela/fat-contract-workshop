@@ -18,11 +18,13 @@ mod fat_sample {
     use scale::{Decode, Encode};
     use sha2::{Sha256, Digest};
 
-    use rustface::{Detector, FaceInfo, ImageData, create_detector_with_model};
-    use rustface::model::{read_model, Model};
+    use quircs;
 
-    const MODEL_SHA256: &str = "c4619d066ed35e84d9a8e842860b0dff567aba0cbb139881075538761db3ff5d";
-    const MODEL_LOCATION: &str = "https://files.catbox.moe/m4y6c6.bin";
+//    use rustface::{Detector, FaceInfo, ImageData, create_detector_with_model};
+//    use rustface::model::{read_model, Model};
+
+//    const MODEL_SHA256: &str = "c4619d066ed35e84d9a8e842860b0dff567aba0cbb139881075538761db3ff5d";
+//    const MODEL_LOCATION: &str = "https://files.catbox.moe/m4y6c6.bin";
 
     #[ink(storage)]
     #[derive(SpreadAllocate)]
@@ -195,6 +197,28 @@ mod fat_sample {
         }
 
         #[ink(message)]
+        pub fn process_qr(&self, img: Img) -> Result<Codes, Error> {
+            if img.data.len() != Into::<usize>::into(img.width) * Into::<usize>::into(img.height) {
+                return Err(Error::InvalidImage);
+            }
+
+            let mut decoder = quircs::Quirc::default();
+            let codes = decoder.identify(Into::<usize>::into(img.width), Into::<usize>::into(img.height), &img.data);
+
+            let mut res = Vec::new();
+            for code in codes {
+                let code = code.expect("failed to extract");
+                let tl = Point { x: code.corners[0].x, y: code.corners[0].y };
+                let tr = Point { x: code.corners[1].x, y: code.corners[1].y };
+                let br = Point { x: code.corners[2].x, y: code.corners[2].y };
+                let bl = Point { x: code.corners[3].x, y: code.corners[3].y };
+                res.push(Code { size: code.size, tl: tl, tr: tr, br: br, bl: bl });
+            }
+
+            Ok(Codes { codes: res })
+        }
+
+        #[ink(message)]
         pub fn process_img(&self, img: Img) -> Result<Faces, Error> {
             if img.data.len() != Into::<usize>::into(img.width) * Into::<usize>::into(img.height) {
                 return Err(Error::InvalidImage);
@@ -202,16 +226,16 @@ mod fat_sample {
 
             // Not clear that this is functioning correctly - generally just getting a hang when
             // attempting to trigger this from the frontend.
-            let response = http_get!(MODEL_LOCATION);
-            if response.status_code != 200 {
-                return Err(Error::RequestFailed);
-            }
-            let mut hasher = Sha256::new();
-            hasher.update(&response.body);
-            let result = hasher.finalize();
-            if hex::encode(result) != MODEL_SHA256 {
-                return Err(Error::InvalidModelSignature);
-            }
+//            let response = http_get!(MODEL_LOCATION);
+//            if response.status_code != 200 {
+//                return Err(Error::RequestFailed);
+//            }
+//            let mut hasher = Sha256::new();
+//            hasher.update(&response.body);
+//            let result = hasher.finalize();
+//            if hex::encode(result) != MODEL_SHA256 {
+//                return Err(Error::InvalidModelSignature);
+//            }
 
             // Pulling in the following code results in floating point operations in the resultant
             // wasm making `uploadCodeToCluster` fail.
@@ -310,6 +334,29 @@ mod fat_sample {
     pub struct SignedAttestation {
         attestation: Attestation,
         signature: Vec<u8>,
+    }
+
+    #[derive(Encode, Decode, Debug)]
+    #[cfg_attr(feature = "std", derive(scale_info::TypeInfo))]
+    pub struct Codes {
+        codes: Vec<Code>,
+    }
+
+    #[derive(Encode, Decode, Debug)]
+    #[cfg_attr(feature = "std", derive(scale_info::TypeInfo))]
+     pub struct Code {
+         size: i32,
+         tl: Point,
+         tr: Point,
+         br: Point,
+         bl: Point,
+    }
+
+    #[derive(Encode, Decode, Debug)]
+    #[cfg_attr(feature = "std", derive(scale_info::TypeInfo))]
+    pub struct Point {
+        x: i32,
+        y: i32,
     }
 
     #[derive(Encode, Decode, Debug)]
